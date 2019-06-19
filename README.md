@@ -22,6 +22,6 @@ This is an application that let us Create, Read, Update and Delete (CRUD) info f
 ![crud_gui][imgcrud_gui]
 
 [pylogo]: media/python-logo-master-v3-TM-flattened.png
-[pycurso]: https://www.youtube.com/watch?v=o8E869dmK3U&list=PLU8oAlHdN5BlvPxziopYZRd55pdqFwkeS&index=1
+[pycurso]: https://www.youtube.com/playlist?list=PLU8oAlHdN5BlvPxziopYZRd55pdqFwkeS
 [imgcalc]: media/calc.png
 [imgcrud_gui]: media/crud-gui.png
