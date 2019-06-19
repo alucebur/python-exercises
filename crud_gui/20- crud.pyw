@@ -1,8 +1,4 @@
 # CRUD GUI
-# Ignorar Id a la hora de insertar registros, RUD por Id (read, luego U o D).
-# CRUD: Crear, leer, actualizar, borrar, igual que los botones.
-# botones Create, Read, Update, Delete, con ventanas informativas.
-
 import tkinter
 from tkinter import messagebox
 import sqlite3
@@ -41,6 +37,7 @@ def connect_to_db():
     else:
         messagebox.showinfo("DB",
                             "Database created successfully.")
+    # Enable buttons and CRUD menu
     button_create.config(state=tkinter.NORMAL)
     button_read.config(state=tkinter.NORMAL)
     button_update.config(state=tkinter.NORMAL)
@@ -80,9 +77,10 @@ def create_user():
     address = user_address.get()
     comment = box_comment.get(1.0, tkinter.END)
     if (name != "") and (password != "") \
-       and (surname != "") and (address != "") and (comment != ""):
-        user_info = [name, password, surname, address, comment]
+       and (surname != "") and (address != ""):
+        user_info = (name, password, surname, address, comment)
         # We ignore ID since it is set as autoincrement
+        # Password is stored in plain text!!! In real world use salted hashes
         my_cursor.execute("INSERT INTO USERS VALUES (NULL,?,?,?,?,?)",
                           user_info)
         conn.commit()
@@ -94,9 +92,9 @@ def create_user():
 ID field will be ignored.")
 
 
-def show_user_info(by_id):
+def show_user_info(tuple_id):
     error = False
-    my_cursor.execute("SELECT * FROM USERS WHERE ID="+by_id)
+    my_cursor.execute("SELECT * FROM USERS WHERE ID=?", tuple_id)
     user_info = my_cursor.fetchone()
     if user_info:
         user_name.set(user_info[1])
@@ -113,11 +111,12 @@ def show_user_info(by_id):
 def read_user():
     id_ = user_id.get()
     if id_ != "":
-        error = show_user_info(id_)
+        error = show_user_info((id_,))
         if not error:
             messagebox.showinfo("Read",
                                 "User info has been retrieved successfully.")
         else:
+            clean_fields()
             messagebox.showwarning("Read",
                                    "Sorry there is no user with the given ID.")
     else:
@@ -132,15 +131,21 @@ def update_user():
     address = user_address.get()
     comment = box_comment.get(1.0, tkinter.END)
     if (id_ != "") and (name != "") and (password != "") \
-            and (surname != "") and (address != "") and (comment != ""):
-        user_info = [name, password, surname, address, comment, id_]
+            and (surname != "") and (address != ""):
+        user_info = (name, password, surname, address, comment, id_)
         sql = """UPDATE USERS SET NAME= ?, PASSWORD=?, SURNAME=?,
                                   ADDRESS=?, COMMENT=?
                               WHERE ID=?"""
         my_cursor.execute(sql, user_info)
         conn.commit()
-        messagebox.showinfo("Update",
-                            "User info has been updated successfully.")
+        changes = my_cursor.rowcount  # Number of rows affected by last execute
+        if changes != 0:
+            messagebox.showinfo("Update",
+                                "User info has been updated successfully.")
+        else:
+            clean_fields()
+            messagebox.showwarning("Update",
+                                   "Sorry there is no user with the given ID.")
     else:
         messagebox.showwarning("Update", "Please fill in all the fields.")
 
@@ -150,8 +155,9 @@ def delete_user():
     id_ = user_id.get()
     if id_ != "":
         # Show user info
-        error = show_user_info(id_)
+        error = show_user_info((id_,))
         if error:
+            clean_fields()
             messagebox.showwarning("Delete",
                                    "Sorry there is no user with the given ID.")
         else:
@@ -159,8 +165,9 @@ def delete_user():
                                             "You are trying to delete \
 this user.\nAre you sure?")
             if answer == "yes":
-                my_cursor.execute("DELETE FROM USERS WHERE ID="+id_)
+                my_cursor.execute("DELETE FROM USERS WHERE ID=?", (id_,))
                 conn.commit()
+                clean_fields()
                 messagebox.showinfo("Delete",
                                     "User has been deleted successfully.")
     else:

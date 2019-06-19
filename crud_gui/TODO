@@ -1,4 +1,5 @@
 # TODO
-- CRUD functions
+- Passwords stored as salted hashes
+- Modularity
 - Encapsulate into a class
 - Documentation
