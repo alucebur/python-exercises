@@ -31,4 +31,5 @@ MANIFEST
 .vscode/
 
 # SQLite
+.sqlite3
 .sqlite3-journal
