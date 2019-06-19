@@ -29,3 +29,6 @@ MANIFEST
 
 # VS Code
 .vscode/
+
+# SQLite
+.sqlite3-journal
