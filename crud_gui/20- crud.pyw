@@ -49,9 +49,6 @@ def connect_to_db():
 
 
 def confirm_exit():
-    global conn
-    global root
-
     answer = messagebox.askquestion("Exit",
                                     "Do you really want to exit?")
     if answer == "yes":
@@ -77,19 +74,97 @@ def clean_fields():
 
 # CRUD Menu
 def create_user():
-    pass
+    name = user_name.get()
+    password = user_password.get()
+    surname = user_surname.get()
+    address = user_address.get()
+    comment = box_comment.get(1.0, tkinter.END)
+    if (name != "") and (password != "") \
+       and (surname != "") and (address != "") and (comment != ""):
+        user_info = [name, password, surname, address, comment]
+        # We ignore ID since it is set as autoincrement
+        my_cursor.execute("INSERT INTO USERS VALUES (NULL,?,?,?,?,?)",
+                          user_info)
+        conn.commit()
+        messagebox.showinfo("Create",
+                            "User info has been added successfully")
+    else:
+        messagebox.showwarning("Create",
+                               "Please fill in all the fields.\n\
+ID field will be ignored.")
+
+
+def show_user_info(by_id):
+    error = False
+    my_cursor.execute("SELECT * FROM USERS WHERE ID="+by_id)
+    user_info = my_cursor.fetchone()
+    if user_info:
+        user_name.set(user_info[1])
+        user_password.set(user_info[2])
+        user_surname.set(user_info[3])
+        user_address.set(user_info[4])
+        box_comment.delete(1.0, tkinter.END)
+        box_comment.insert(1.0, user_info[5])
+    else:
+        error = True
+    return error
 
 
 def read_user():
-    pass
+    id_ = user_id.get()
+    if id_ != "":
+        error = show_user_info(id_)
+        if not error:
+            messagebox.showinfo("Read",
+                                "User info has been retrieved successfully.")
+        else:
+            messagebox.showwarning("Read",
+                                   "Sorry there is no user with the given ID.")
+    else:
+        messagebox.showwarning("Read", "Please fill in the ID field.")
 
 
 def update_user():
-    pass
+    id_ = user_id.get()
+    name = user_name.get()
+    password = user_password.get()
+    surname = user_surname.get()
+    address = user_address.get()
+    comment = box_comment.get(1.0, tkinter.END)
+    if (id_ != "") and (name != "") and (password != "") \
+            and (surname != "") and (address != "") and (comment != ""):
+        user_info = [name, password, surname, address, comment, id_]
+        sql = """UPDATE USERS SET NAME= ?, PASSWORD=?, SURNAME=?,
+                                  ADDRESS=?, COMMENT=?
+                              WHERE ID=?"""
+        my_cursor.execute(sql, user_info)
+        conn.commit()
+        messagebox.showinfo("Update",
+                            "User info has been updated successfully.")
+    else:
+        messagebox.showwarning("Update", "Please fill in all the fields.")
 
 
 def delete_user():
-    pass
+    error = False
+    id_ = user_id.get()
+    if id_ != "":
+        # Show user info
+        error = show_user_info(id_)
+        if error:
+            messagebox.showwarning("Delete",
+                                   "Sorry there is no user with the given ID.")
+        else:
+            answer = messagebox.askquestion("Delete",
+                                            "You are trying to delete \
+this user.\nAre you sure?")
+            if answer == "yes":
+                my_cursor.execute("DELETE FROM USERS WHERE ID="+id_)
+                conn.commit()
+                messagebox.showinfo("Delete",
+                                    "User has been deleted successfully.")
+    else:
+        messagebox.showwarning("Delete", "Please fill in the ID field.")
 
 
 # Help Menu
