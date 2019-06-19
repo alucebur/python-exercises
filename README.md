@@ -1,5 +1,4 @@
 # Python exercises
-![Python][pylogo]
 
 These are some small exercises from the python course I am studying - Check it out at [Píldoras informáticas][pycurso] (by Juan Díaz). I will be uploading my programs here until I complete it. This is also my first time using git!
 
@@ -21,7 +20,6 @@ This is an application that let us Create, Read, Update and Delete (CRUD) info f
 
 ![crud_gui][imgcrud_gui]
 
-[pylogo]: media/python-logo-master-v3-TM-flattened.png
 [pycurso]: https://www.youtube.com/playlist?list=PLU8oAlHdN5BlvPxziopYZRd55pdqFwkeS
 [imgcalc]: media/calc.png
 [imgcrud_gui]: media/crud-gui.png
