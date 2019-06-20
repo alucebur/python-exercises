@@ -3,6 +3,7 @@ import tkinter
 from tkinter import messagebox
 import sqlite3
 import os
+import security as sec
 
 FRAME_BGCOLOR = "#ccccff"
 BUTTON_A_BGCOLOR = "#768CCE"
@@ -26,7 +27,7 @@ def connect_to_db():
             CREATE TABLE USERS (
                 ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 NAME VARCHAR(50),
-                PASSWORD VARCHAR(20),
+                PASSWORD VARCHAR(87),
                 SURNAME VARCHAR(50),
                 ADDRESS VARCHAR(50),
                 COMMENT VARCHAR(100))
@@ -78,9 +79,9 @@ def create_user():
     comment = box_comment.get(1.0, tkinter.END)
     if (name != "") and (password != "") \
        and (surname != "") and (address != ""):
-        user_info = (name, password, surname, address, comment)
+        sec_password = sec.encrypt_password(password)
+        user_info = (name, sec_password, surname, address, comment)
         # We ignore ID since it is set as autoincrement
-        # Password is stored in plain text!!! In real world use salted hashes
         my_cursor.execute("INSERT INTO USERS VALUES (NULL,?,?,?,?,?)",
                           user_info)
         conn.commit()
@@ -94,15 +95,19 @@ ID field will be ignored.")
 
 def show_user_info(tuple_id):
     error = False
-    my_cursor.execute("SELECT * FROM USERS WHERE ID=?", tuple_id)
+    my_cursor.execute("""SELECT NAME,
+                                SURNAME,
+                                ADDRESS,
+                                COMMENT
+                         FROM USERS WHERE ID=?""", tuple_id)
     user_info = my_cursor.fetchone()
     if user_info:
-        user_name.set(user_info[1])
-        user_password.set(user_info[2])
-        user_surname.set(user_info[3])
-        user_address.set(user_info[4])
+        user_name.set(user_info[0])
+        user_password.set('')  # It is hashed
+        user_surname.set(user_info[1])
+        user_address.set(user_info[2])
         box_comment.delete(1.0, tkinter.END)
-        box_comment.insert(1.0, user_info[5])
+        box_comment.insert(1.0, user_info[3])
     else:
         error = True
     return error
@@ -124,28 +129,41 @@ def read_user():
 
 
 def update_user():
+    error = False
     id_ = user_id.get()
     name = user_name.get()
     password = user_password.get()
     surname = user_surname.get()
     address = user_address.get()
     comment = box_comment.get(1.0, tkinter.END)
-    if (id_ != "") and (name != "") and (password != "") \
+    if (id_ != "") and (name != "") \
             and (surname != "") and (address != ""):
-        user_info = (name, password, surname, address, comment, id_)
-        sql = """UPDATE USERS SET NAME= ?, PASSWORD=?, SURNAME=?,
-                                  ADDRESS=?, COMMENT=?
-                              WHERE ID=?"""
-        my_cursor.execute(sql, user_info)
-        conn.commit()
-        changes = my_cursor.rowcount  # Number of rows affected by last execute
-        if changes != 0:
-            messagebox.showinfo("Update",
-                                "User info has been updated successfully.")
-        else:
-            clean_fields()
-            messagebox.showwarning("Update",
-                                   "Sorry there is no user with the given ID.")
+        if check_pass.get() == 1 and (password != ""):
+            sec_password = sec.encrypt_password(password)
+            user_info = (name, sec_password, surname, address, comment, id_)
+            sql = """UPDATE USERS SET NAME= ?, PASSWORD=?, SURNAME=?,
+                                      ADDRESS=?, COMMENT=?
+                                  WHERE ID=?"""
+        elif check_pass.get() == 1:
+            error = True
+            messagebox.showwarning("Update", "Please fill password field.")
+        else:  # Not password updated
+            user_info = (name, surname, address, comment, id_)
+            sql = """UPDATE USERS SET NAME= ?, SURNAME=?,
+                                      ADDRESS=?, COMMENT=?
+                                  WHERE ID=?"""
+        if not error:
+            my_cursor.execute(sql, user_info)
+            conn.commit()
+            changes = my_cursor.rowcount  # Number of rows updated
+            if changes != 0:
+                messagebox.showinfo("Update",
+                                    "User info has been updated successfully.")
+            else:
+                clean_fields()
+                messagebox.showwarning("Update",
+                                       "Sorry there is no user with the \
+given ID.")
     else:
         messagebox.showwarning("Update", "Please fill in all the fields.")
 
@@ -195,9 +213,12 @@ top_frame = tkinter.Frame(main_frame)
 top_frame.config(bg=FRAME_BGCOLOR)
 bottom_frame = tkinter.LabelFrame(main_frame, text="CRUD")
 bottom_frame.config(bg=FRAME_BGCOLOR)
+status_frame = tkinter.Frame(main_frame)
+status_frame.config(bg=FRAME_BGCOLOR)
 main_frame.pack()
 top_frame.pack()
 bottom_frame.pack()
+status_frame.pack()
 
 # Menu bar
 menu_bar = tkinter.Menu(root)
@@ -246,6 +267,14 @@ box_name = tkinter.Entry(top_frame, textvariable=user_name)
 box_name.grid(row=1, column=1, sticky="w", pady=10, padx=0)
 box_name.config(fg="black", justify="center")
 
+
+def display_help(event):
+    label_status.configure(text="Update password")
+
+
+def remove_help(event):
+    label_status.configure(text="")
+
 # Password
 label_password = tkinter.Label(top_frame, text="Password:")
 label_password.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
@@ -255,6 +284,19 @@ user_password = tkinter.StringVar()
 box_password = tkinter.Entry(top_frame, textvariable=user_password)
 box_password.grid(row=2, column=1, sticky="w", pady=10, padx=0)
 box_password.config(fg="black", justify="center", show="*")
+
+check_pass = tkinter.IntVar()
+checkbutton_pass = tkinter.Checkbutton(top_frame, text="U",
+                                       variable=check_pass,
+                                       onvalue=1, offvalue=0)
+checkbutton_pass.config(bg=FRAME_BGCOLOR, activebackground=FRAME_BGCOLOR,
+                        font=("Garamond", 12))
+checkbutton_pass.grid(row=2, column=3, sticky="w", pady=10, padx=10)
+label_status = tkinter.Label(status_frame, text="")
+label_status.config(bg=FRAME_BGCOLOR, font=("Garamond", 10))
+label_status.grid(row=0, column=0, sticky="e", pady=10, padx=10)
+checkbutton_pass.bind("<Enter>", display_help)
+checkbutton_pass.bind("<Leave>", remove_help)
 
 # Surname
 label_surname = tkinter.Label(top_frame, text="Surname:")
@@ -295,27 +337,27 @@ button_create = tkinter.Button(bottom_frame, text="Create",
                                bg=BUTTON_BGCOLOR,
                                state=tkinter.DISABLED,
                                command=create_user)
-button_create.grid(row=6, column=0, sticky="w", pady=10, padx=10)
+button_create.grid(row=0, column=0, sticky="w", pady=10, padx=10)
 
 button_read = tkinter.Button(bottom_frame, text="Read",
                              activebackground=BUTTON_A_BGCOLOR,
                              bg=BUTTON_BGCOLOR,
                              state=tkinter.DISABLED,
                              command=read_user)
-button_read.grid(row=6, column=1, sticky="w", pady=10, padx=10)
+button_read.grid(row=0, column=1, sticky="w", pady=10, padx=10)
 
 button_update = tkinter.Button(bottom_frame, text="Update",
                                activebackground=BUTTON_A_BGCOLOR,
                                bg=BUTTON_BGCOLOR,
                                state=tkinter.DISABLED,
                                command=update_user)
-button_update.grid(row=6, column=2, sticky="w", pady=10, padx=10)
+button_update.grid(row=0, column=2, sticky="w", pady=10, padx=10)
 
 button_delete = tkinter.Button(bottom_frame, text="Delete",
                                activebackground=BUTTON_A_BGCOLOR,
                                bg=BUTTON_BGCOLOR,
                                state=tkinter.DISABLED,
                                command=delete_user)
-button_delete.grid(row=6, column=3, sticky="w", pady=10, padx=10)
+button_delete.grid(row=0, column=3, sticky="w", pady=10, padx=10)
 
 root.mainloop()
