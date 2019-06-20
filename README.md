@@ -16,7 +16,7 @@ This is a calculator that let us do some basic aritmethic operations. Tkinter li
 ---
 
 ## crud_gui
-This is an application that let us Create, Read, Update and Delete (CRUD) info from different users in a local database. Tkinter was used for the GUI, and sqlite3 to work with the SQLite database.
+This is an application that let us Create, Read, Update and Delete (CRUD) info from different users in a local database. Tkinter was used for the GUI, sqlite3 to work with the SQLite database, and passlib for hashing passwords.
 
 ![crud_gui][imgcrud_gui]
 
