@@ -1,4 +1,8 @@
-# CRUD GUI
+"""
+Stores info provided by the user in a local sqlite database,
+and let them retrieve, change or delete such info.
+Password is hashed for security reasons so it can't be retrieved.
+"""
 import tkinter
 from tkinter import messagebox
 import sqlite3
@@ -14,52 +18,62 @@ ICON_NAME = os.path.join("icons", "crud.ico")
 
 # DB menu
 def connect_to_db():
+    """
+    Connects to the db, creating it and the table users if they don't exist.
+    By doing so, enables CRUD menu and buttons.
+    """
     global conn
     global my_cursor
 
-    conn = sqlite3.connect(DB_NAME)
-    my_cursor = conn.cursor()
-    # Create table if not exists
-    # It would be better using CREATE TABLE IF NOT EXISTS USERS
-    # but we are required to catch the exception
     try:
-        my_cursor.execute("""
-            CREATE TABLE USERS (
-                ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                NAME VARCHAR(50),
-                PASSWORD VARCHAR(87),
-                SURNAME VARCHAR(50),
-                ADDRESS VARCHAR(50),
-                COMMENT VARCHAR(100))
-        """)
-    except:
+        # If DB doesn't exist, it will create it (open in rwc mode by default)
+        # We can avoid this by using a URI:
+        #   DB_URI = f"file:{DB_NAME}?mode=rw"
+        #   conn = sqlite3.connect(DB_URI, uri=True)
+        conn = sqlite3.connect(DB_NAME)
+    except sqlite3.OperationalError:
         messagebox.showwarning("DB",
-                               "Database already exists.")
+                               "Connection could not be established.")
     else:
+        my_cursor = conn.cursor()
         messagebox.showinfo("DB",
-                            "Database created successfully.")
-    # Enable buttons and CRUD menu
-    button_create.config(state=tkinter.NORMAL)
-    button_read.config(state=tkinter.NORMAL)
-    button_update.config(state=tkinter.NORMAL)
-    button_delete.config(state=tkinter.NORMAL)
-    menu_bar.entryconfigure(3, state=tkinter.NORMAL)
+                            "Connection established successfully.")
+        my_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name text,
+                password text,
+                surname text,
+                address text,
+                comment text)
+        """)
+        # Enable buttons and CRUD menu
+        button_create.config(state=tkinter.NORMAL)
+        button_read.config(state=tkinter.NORMAL)
+        button_update.config(state=tkinter.NORMAL)
+        button_delete.config(state=tkinter.NORMAL)
+        menu_bar.entryconfigure(3, state=tkinter.NORMAL)
 
 
 def confirm_exit():
+    """
+    Closes the program after user agreement.
+    """
     answer = messagebox.askquestion("Exit",
                                     "Do you really want to exit?")
     if answer == "yes":
         try:
             conn.close()
-        except:
+        except NameError:  # DB connection was not established
             pass
         finally:
             root.destroy()
 
 
-# Clean Menu
 def clean_fields():
+    """
+    Cleans all fields of the form.
+    """
     user_id.set("")
     user_name.set("")
     # Another way to do it:
@@ -68,21 +82,25 @@ def clean_fields():
     user_surname.set("")
     user_address.set("")
     box_comment.delete(1.0, tkinter.END)
+    check_pass.set(0)
 
 
 # CRUD Menu
 def create_user():
+    """
+    Inserts data from the form into the database.
+    """
     name = user_name.get()
     password = user_password.get()
     surname = user_surname.get()
     address = user_address.get()
     comment = box_comment.get(1.0, tkinter.END)
-    if (name != "") and (password != "") \
-       and (surname != "") and (address != ""):
+    if ((name != "") and (password != "") and
+            (surname != "") and (address != "")):
         sec_password = sec.encrypt_password(password)
         user_info = (name, sec_password, surname, address, comment)
-        # We ignore ID since it is set as autoincrement
-        my_cursor.execute("INSERT INTO USERS VALUES (NULL,?,?,?,?,?)",
+        # We ignore ID since it is set autoincremental
+        my_cursor.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
                           user_info)
         conn.commit()
         messagebox.showinfo("Create",
@@ -94,14 +112,18 @@ ID field will be ignored.")
 
 
 def show_user_info(tuple_id):
+    """
+    Retrieves data from the database and shows it.
+    Returns error=True if data could not be retrieved.
+    """
     error = False
-    my_cursor.execute("""SELECT NAME,
-                                SURNAME,
-                                ADDRESS,
-                                COMMENT
-                         FROM USERS WHERE ID=?""", tuple_id)
+    my_cursor.execute("""SELECT name,
+                                surname,
+                                address,
+                                comment
+                         FROM users WHERE user_id=?""", tuple_id)
     user_info = my_cursor.fetchone()
-    if user_info:
+    if user_info:  # empty sequences are false
         user_name.set(user_info[0])
         user_password.set('')  # It is hashed
         user_surname.set(user_info[1])
@@ -114,6 +136,10 @@ def show_user_info(tuple_id):
 
 
 def read_user():
+    """
+    Calls show_user_info to retrieve data from the requested user and/or
+    display informative pop-ups of the process.
+    """
     id_ = user_id.get()
     if id_ != "":
         error = show_user_info((id_,))
@@ -129,6 +155,9 @@ def read_user():
 
 
 def update_user():
+    """
+    Modifies data from the user that matches the given user_id.
+    """
     error = False
     id_ = user_id.get()
     name = user_name.get()
@@ -136,22 +165,22 @@ def update_user():
     surname = user_surname.get()
     address = user_address.get()
     comment = box_comment.get(1.0, tkinter.END)
-    if (id_ != "") and (name != "") \
-            and (surname != "") and (address != ""):
+    if ((id_ != "") and (name != "") and
+            (surname != "") and (address != "")):
         if check_pass.get() == 1 and (password != ""):
             sec_password = sec.encrypt_password(password)
             user_info = (name, sec_password, surname, address, comment, id_)
-            sql = """UPDATE USERS SET NAME= ?, PASSWORD=?, SURNAME=?,
-                                      ADDRESS=?, COMMENT=?
-                                  WHERE ID=?"""
+            sql = """UPDATE users SET name= ?, password=?, surname=?,
+                                      address=?, comment=?
+                                  WHERE user_id=?"""
         elif check_pass.get() == 1:
             error = True
             messagebox.showwarning("Update", "Please fill password field.")
         else:  # Not password updated
             user_info = (name, surname, address, comment, id_)
-            sql = """UPDATE USERS SET NAME= ?, SURNAME=?,
-                                      ADDRESS=?, COMMENT=?
-                                  WHERE ID=?"""
+            sql = """UPDATE users SET name= ?, surname=?,
+                                      address=?, comment=?
+                                  WHERE user_id=?"""
         if not error:
             my_cursor.execute(sql, user_info)
             conn.commit()
@@ -169,10 +198,13 @@ given ID.")
 
 
 def delete_user():
+    """
+    Completely removes all data of the given user from the database.
+    """
     error = False
     id_ = user_id.get()
     if id_ != "":
-        # Show user info
+        # Shows user info
         error = show_user_info((id_,))
         if error:
             clean_fields()
@@ -183,7 +215,7 @@ def delete_user():
                                             "You are trying to delete \
 this user.\nAre you sure?")
             if answer == "yes":
-                my_cursor.execute("DELETE FROM USERS WHERE ID=?", (id_,))
+                my_cursor.execute("DELETE FROM users WHERE user_id=?", (id_,))
                 conn.commit()
                 clean_fields()
                 messagebox.showinfo("Delete",
@@ -194,14 +226,19 @@ this user.\nAre you sure?")
 
 # Help Menu
 def info_about():
-    messagebox.showinfo("Acerca de", "CRUD GUI App\n\
-Alucebur, 2019")
+    """
+    Displays About info.
+    """
+    messagebox.showinfo("Acerca de", "CRUD GUI App\nAlucebur, 2019")
 
 
 def info_license():
+    """
+    Displays License info.
+    """
     messagebox.showwarning("License",
                            "This program is unlicensed.\n\
-Feel free to use this code as you wish.")
+Feel free to use this code at your pleasure.")
 
 root = tkinter.Tk()
 root.title("CRUD GUI")

@@ -4,19 +4,19 @@ These are some small exercises from the python course I am studying - Check it o
 
 Exercises are divided into folders:
 - [CALC](#calc) - Basic calculator using Tkinter.
-- [CRUD_GUI](#crud_gui) - CRUD app using Tkinter and SQLite3.
+- [CRUD_GUI](#crud-gui) - CRUD app using Tkinter and SQLite3.
 
 ---
 
-## calc
-This is a calculator that let us do some basic aritmethic operations. Tkinter library was used for the GUI.
+## Calc
+This is a calculator that let us do some basic aritmethic operations. Tkinter library was used for the GUI. Decimal format: 3,14.
 
 ![calc][imgcalc]
 
 ---
 
-## crud_gui
-This is an application that let us Create, Read, Update and Delete (CRUD) info from different users in a local database. Tkinter was used for the GUI, sqlite3 to work with the SQLite database, and passlib for hashing passwords.
+## Crud Gui
+This is an application that let us Create, Read, Update and Delete (CRUD) info from different users in a local database. Tkinter was used for the GUI, sqlite3 to work with the SQLite database, and passlib for hashing passwords. SQLite queries are parameterized to improve security, and the OS library was used for compatibility between Windows-UNIX systems.
 
 ![crud_gui][imgcrud_gui]
 
