@@ -16,385 +16,483 @@ DB_NAME = os.path.join("crud_gui", "crud.sqlite3")
 ICON_NAME = os.path.join("icons", "crud.ico")
 
 
-# DB menu
-def connect_to_db():
+class App():
     """
-    Connects to the db, creating it and the table users if they don't exist.
-    By doing so, enables CRUD menu and buttons.
+    Controller, builds graphic interface (self.root) and
+    connection to database (self.conn)
     """
-    global conn
-    global my_cursor
+    def __init__(self, db_name):
+        self.db_name = db_name
+        self.root = tkinter.Tk()
+        self.root.title("CRUD GUI")
+        self.root.resizable(False, False)  # Width, Height
+        self.root.iconbitmap(ICON_NAME)
+        container = tkinter.Frame(self.root)
+        container.parent = self.root
+        container.config(pady=10, padx=10, bg=FRAME_BGCOLOR)
+        container.pack()
 
-    try:
-        # If DB doesn't exist, it will create it (open in rwc mode by default)
-        # We can avoid this by using a URI:
-        #   DB_URI = f"file:{DB_NAME}?mode=rw"
-        #   conn = sqlite3.connect(DB_URI, uri=True)
-        conn = sqlite3.connect(DB_NAME)
-    except sqlite3.OperationalError:
-        messagebox.showwarning("DB",
-                               "Connection could not be established.")
-    else:
-        my_cursor = conn.cursor()
-        messagebox.showinfo("DB",
-                            "Connection established successfully.")
-        my_cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name text,
-                password text,
-                surname text,
-                address text,
-                comment text)
-        """)
-        # Enable buttons and CRUD menu
-        button_create.config(state=tkinter.NORMAL)
-        button_read.config(state=tkinter.NORMAL)
-        button_update.config(state=tkinter.NORMAL)
-        button_delete.config(state=tkinter.NORMAL)
-        menu_bar.entryconfigure(3, state=tkinter.NORMAL)
+        # Control variables
+        self.user_id = tkinter.StringVar()
+        self.user_name = tkinter.StringVar()
+        self.user_password = tkinter.StringVar()
+        self.user_surname = tkinter.StringVar()
+        self.user_address = tkinter.StringVar()
+        self.check_pass = tkinter.IntVar()
 
+        # Frames
+        self.root.frames = {}
 
-def confirm_exit():
-    """
-    Closes the program after user agreement.
-    """
-    answer = messagebox.askquestion("Exit",
-                                    "Do you really want to exit?")
-    if answer == "yes":
+        top_frame = DataField(container, self)
+        self.root.frames[DataField] = top_frame
+
+        bottom_frame = ButtonArea(container, self)
+        self.root.frames[ButtonArea] = bottom_frame
+
+        status_frame = StatusBar(container, self)
+        self.root.frames[StatusBar] = status_frame
+
+        # Menu bar
+        self.root.menu_bar = MenuBar(self.root, self)
+        self.root.config(menu=self.root.menu_bar)
+
+        self.root.mainloop()
+
+    # DB menu
+    def connect_to_db(self):
+        """
+        Connects to the db, creating it and the table users if they
+        don't exist. By doing so, enables CRUD menu and buttons.
+        """
         try:
-            conn.close()
-        except NameError:  # DB connection was not established
-            pass
-        finally:
-            root.destroy()
+            # If DB doesn't exist, will be created
+            #   (open in rwc mode by default)
+            # We can avoid this by using a URI:
+            #   DB_URI = f"file:{DB_NAME}?mode=rw"
+            #   conn = sqlite3.connect(DB_URI, uri=True)
+            self.conn = sqlite3.connect(self.db_name)
+        except sqlite3.OperationalError:
+            messagebox.showwarning("DB",
+                                   "Connection could not be established.")
+        else:
+            self.cursor = self.conn.cursor()
+            messagebox.showinfo("DB",
+                                "Connection established successfully.")
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name text,
+                    password text,
+                    surname text,
+                    address text,
+                    comment text)
+            """)
+            # Enable buttons and CRUD menu
+            self.root.frames[ButtonArea].button_create.config(
+                state=tkinter.NORMAL)
+            self.root.frames[ButtonArea].button_read.config(
+                state=tkinter.NORMAL)
+            self.root.frames[ButtonArea].button_update.config(
+                state=tkinter.NORMAL)
+            self.root.frames[ButtonArea].button_delete.config(
+                state=tkinter.NORMAL)
+            self.root.menu_bar.entryconfigure(3, state=tkinter.NORMAL)
 
+    def confirm_exit(self):
+        """
+        Closes the program after user agreement.
+        """
+        answer = messagebox.askquestion("Exit",
+                                        "Do you really want to exit?")
+        if answer == "yes":
+            try:
+                self.conn.close()
+            except NameError:  # DB connection was not established
+                pass
+            finally:
+                self.root.destroy()
 
-def clean_fields():
-    """
-    Cleans all fields of the form.
-    """
-    user_id.set("")
-    user_name.set("")
-    # Another way to do it:
-    # box_name.delete(0, tkinter.END)
-    user_password.set("")
-    user_surname.set("")
-    user_address.set("")
-    box_comment.delete(1.0, tkinter.END)
-    check_pass.set(0)
+    def clean_fields(self):
+        """
+        Cleans all fields of the form.
+        """
+        self.user_id.set("")
+        self.user_name.set("")
+        # Another way to do it:
+        # self.root.frames[DataField].box_name.delete(0, tkinter.END)
+        self.user_password.set("")
+        self.user_surname.set("")
+        self.user_address.set("")
+        self.root.frames[DataField].box_comment.delete(1.0, tkinter.END)
+        self.check_pass.set(0)
 
-
-# CRUD Menu
-def create_user():
-    """
-    Inserts data from the form into the database.
-    """
-    name = user_name.get()
-    password = user_password.get()
-    surname = user_surname.get()
-    address = user_address.get()
-    comment = box_comment.get(1.0, tkinter.END)
-    if ((name != "") and (password != "") and
-            (surname != "") and (address != "")):
-        sec_password = sec.encrypt_password(password)
-        user_info = (name, sec_password, surname, address, comment)
-        # We ignore ID since it is set autoincremental
-        my_cursor.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
-                          user_info)
-        conn.commit()
-        messagebox.showinfo("Create",
-                            "User info has been added successfully")
-    else:
-        messagebox.showwarning("Create",
-                               "Please fill in all the fields.\n\
+    # CRUD Menu
+    def create_user(self):
+        """
+        Inserts data from the form into the database.
+        """
+        name = self.user_name.get()
+        password = self.user_password.get()
+        surname = self.user_surname.get()
+        address = self.user_address.get()
+        comment = self.root.frames[DataField].box_comment.get(
+            1.0, tkinter.END)
+        if ((name != "") and (password != "") and
+                (surname != "") and (address != "")):
+            sec_password = sec.encrypt_password(password)
+            user_info = (name, sec_password, surname, address, comment)
+            # We ignore ID since it is set autoincremental
+            self.cursor.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
+                                user_info)
+            self.conn.commit()
+            messagebox.showinfo("Create",
+                                "User info has been added successfully")
+        else:
+            messagebox.showwarning("Create",
+                                   "Please fill in all the fields.\n\
 ID field will be ignored.")
 
-
-def show_user_info(tuple_id):
-    """
-    Retrieves data from the database and shows it.
-    Returns error=True if data could not be retrieved.
-    """
-    error = False
-    my_cursor.execute("""SELECT name,
-                                surname,
-                                address,
-                                comment
-                         FROM users WHERE user_id=?""", tuple_id)
-    user_info = my_cursor.fetchone()
-    if user_info:  # empty sequences are false
-        user_name.set(user_info[0])
-        user_password.set('')  # It is hashed
-        user_surname.set(user_info[1])
-        user_address.set(user_info[2])
-        box_comment.delete(1.0, tkinter.END)
-        box_comment.insert(1.0, user_info[3])
-    else:
-        error = True
-    return error
-
-
-def read_user():
-    """
-    Calls show_user_info to retrieve data from the requested user and/or
-    display informative pop-ups of the process.
-    """
-    id_ = user_id.get()
-    if id_ != "":
-        error = show_user_info((id_,))
-        if not error:
-            messagebox.showinfo("Read",
-                                "User info has been retrieved successfully.")
+    def show_user_info(self, tuple_id):
+        """
+        Retrieves data from the database and shows it.
+        Returns error=True if data could not be retrieved.
+        """
+        error = False
+        self.cursor.execute("""SELECT name,
+                                      surname,
+                                      address,
+                                      comment
+                               FROM users WHERE user_id=?""", tuple_id)
+        user_info = self.cursor.fetchone()
+        if user_info:  # empty sequences are false
+            self.user_name.set(user_info[0])
+            self.user_password.set('')  # It is hashed
+            self.user_surname.set(user_info[1])
+            self.user_address.set(user_info[2])
+            self.root.frames[DataField].box_comment.delete(
+                1.0, tkinter.END)
+            self.root.frames[DataField].box_comment.insert(
+                1.0, user_info[3])
         else:
-            clean_fields()
-            messagebox.showwarning("Read",
-                                   "Sorry there is no user with the given ID.")
-    else:
-        messagebox.showwarning("Read", "Please fill in the ID field.")
-
-
-def update_user():
-    """
-    Modifies data from the user that matches the given user_id.
-    """
-    error = False
-    id_ = user_id.get()
-    name = user_name.get()
-    password = user_password.get()
-    surname = user_surname.get()
-    address = user_address.get()
-    comment = box_comment.get(1.0, tkinter.END)
-    if ((id_ != "") and (name != "") and
-            (surname != "") and (address != "")):
-        if check_pass.get() == 1 and (password != ""):
-            sec_password = sec.encrypt_password(password)
-            user_info = (name, sec_password, surname, address, comment, id_)
-            sql = """UPDATE users SET name= ?, password=?, surname=?,
-                                      address=?, comment=?
-                                  WHERE user_id=?"""
-        elif check_pass.get() == 1:
             error = True
-            messagebox.showwarning("Update", "Please fill password field.")
-        else:  # Not password updated
-            user_info = (name, surname, address, comment, id_)
-            sql = """UPDATE users SET name= ?, surname=?,
-                                      address=?, comment=?
-                                  WHERE user_id=?"""
-        if not error:
-            my_cursor.execute(sql, user_info)
-            conn.commit()
-            changes = my_cursor.rowcount  # Number of rows updated
-            if changes != 0:
-                messagebox.showinfo("Update",
-                                    "User info has been updated successfully.")
+        return error
+
+    def read_user(self):
+        """
+        Calls show_user_info to retrieve data from the requested
+        user and/or display informative pop-ups of the process.
+        """
+        id_ = self.user_id.get()
+        if id_ != "":
+            error = self.show_user_info((id_,))
+            if not error:
+                messagebox.showinfo("Read",
+                                    "User info has been retrieved \
+successfully.")
             else:
-                clean_fields()
-                messagebox.showwarning("Update",
-                                       "Sorry there is no user with the \
-given ID.")
-    else:
-        messagebox.showwarning("Update", "Please fill in all the fields.")
-
-
-def delete_user():
-    """
-    Completely removes all data of the given user from the database.
-    """
-    error = False
-    id_ = user_id.get()
-    if id_ != "":
-        # Shows user info
-        error = show_user_info((id_,))
-        if error:
-            clean_fields()
-            messagebox.showwarning("Delete",
-                                   "Sorry there is no user with the given ID.")
+                self.clean_fields()
+                messagebox.showwarning("Read",
+                                       "Sorry there is no user with \
+the given ID.")
         else:
-            answer = messagebox.askquestion("Delete",
-                                            "You are trying to delete \
-this user.\nAre you sure?")
-            if answer == "yes":
-                my_cursor.execute("DELETE FROM users WHERE user_id=?", (id_,))
-                conn.commit()
-                clean_fields()
-                messagebox.showinfo("Delete",
-                                    "User has been deleted successfully.")
-    else:
-        messagebox.showwarning("Delete", "Please fill in the ID field.")
+            messagebox.showwarning("Read", "Please fill in the ID field.")
 
+    def update_user(self):
+        """
+        Modifies data from the user that matches the given user_id.
+        """
+        error = False
+        id_ = self.user_id.get()
+        name = self.user_name.get()
+        password = self.user_password.get()
+        surname = self.user_surname.get()
+        address = self.user_address.get()
+        comment = self.root.frames[DataField].box_comment.get(1.0, tkinter.END)
+        if ((id_ != "") and (name != "") and
+                (surname != "") and (address != "")):
+            if self.check_pass.get() == 1 and (password != ""):
+                sec_password = sec.encrypt_password(password)
+                user_info = (name, sec_password, surname,
+                             address, comment, id_)
+                sql = """UPDATE users SET name= ?, password=?, surname=?,
+                                          address=?, comment=?
+                                      WHERE user_id=?"""
+            elif self.check_pass.get() == 1:
+                error = True
+                messagebox.showwarning("Update", "Please fill password \
+field.")
+            else:  # Not password updated
+                user_info = (name, surname, address, comment, id_)
+                sql = """UPDATE users SET name= ?, surname=?,
+                                          address=?, comment=?
+                                      WHERE user_id=?"""
+            if not error:
+                self.cursor.execute(sql, user_info)
+                self.conn.commit()
+                changes = self.cursor.rowcount  # Number of rows updated
+                if changes != 0:
+                    messagebox.showinfo("Update",
+                                        "User info has been updated \
+successfully.")
+                else:
+                    self.clean_fields()
+                    messagebox.showwarning("Update",
+                                           "Sorry there is no user \
+with the given ID.")
+        else:
+            messagebox.showwarning("Update",
+                                   "Please fill in all the fields.")
 
-# Help Menu
-def info_about():
-    """
-    Displays About info.
-    """
-    messagebox.showinfo("Acerca de", "CRUD GUI App\nAlucebur, 2019")
+    def delete_user(self):
+        """
+        Completely removes all data of the given user from the database.
+        """
+        error = False
+        id_ = self.user_id.get()
+        if id_ != "":
+            # Shows user info
+            error = self.show_user_info((id_,))
+            if error:
+                self.clean_fields()
+                messagebox.showwarning("Delete",
+                                       "Sorry there is no user with \
+the given ID.")
+            else:
+                answer = messagebox.askquestion("Delete",
+                                                "You are trying to \
+delete this user.\nAre you sure?")
+                if answer == "yes":
+                    self.cursor.execute("DELETE FROM users WHERE user_id=?",
+                                        (id_,))
+                    self.conn.commit()
+                    self.clean_fields()
+                    messagebox.showinfo("Delete",
+                                        "User has been deleted successfully.")
+        else:
+            messagebox.showwarning("Delete", "Please fill in the ID field.")
 
+    # Help Menu
+    @staticmethod
+    def info_about():
+        """
+        Displays About info.
+        """
+        messagebox.showinfo("Acerca de", "CRUD GUI App\nAlucebur, 2019")
 
-def info_license():
-    """
-    Displays License info.
-    """
-    messagebox.showwarning("License",
-                           "This program is unlicensed.\n\
+    @staticmethod
+    def info_license():
+        """
+        Displays License info.
+        """
+        messagebox.showwarning("License",
+                               "This program is unlicensed.\n\
 Feel free to use this code at your pleasure.")
 
-root = tkinter.Tk()
-root.title("CRUD GUI")
-root.resizable(False, False)  # Width, Height
-root.iconbitmap(ICON_NAME)
-main_frame = tkinter.Frame(root)
-main_frame.config(pady=10, padx=10, bg=FRAME_BGCOLOR)
-top_frame = tkinter.Frame(main_frame)
-top_frame.config(bg=FRAME_BGCOLOR)
-bottom_frame = tkinter.LabelFrame(main_frame, text="CRUD")
-bottom_frame.config(bg=FRAME_BGCOLOR)
-status_frame = tkinter.Frame(main_frame)
-status_frame.config(bg=FRAME_BGCOLOR)
-main_frame.pack()
-top_frame.pack()
-bottom_frame.pack()
-status_frame.pack()
 
-# Menu bar
-menu_bar = tkinter.Menu(root)
-root.config(menu=menu_bar)
+class DataField(tkinter.Frame):
+    """
+    Frame with text fields
+    """
+    def __init__(self, parent, controller):
+        tkinter.Frame.__init__(self, parent)
+        self.parent = parent
+        self.controller = controller
+        self.config(bg=FRAME_BGCOLOR)
+        self.pack()
 
-menu_db = tkinter.Menu(menu_bar, tearoff=0)
-menu_db.add_command(label="Connect", command=connect_to_db)
-menu_db.add_separator()
-menu_db.add_command(label="Exit", command=confirm_exit)
+        # Id
+        self.label_id = tkinter.Label(self, text="Id:")
+        self.label_id.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_id.grid(row=0, column=0, sticky="e", pady=10, padx=10)
 
-menu_clean = tkinter.Menu(menu_bar, tearoff=0)
-menu_clean.add_command(label="Clean fields", command=clean_fields)
+        self.box_id = tkinter.Entry(self, textvariable=controller.user_id)
+        self.box_id.grid(row=0, column=1, sticky="w", pady=10, padx=0)
+        self.box_id.config(fg="red", justify="center")
 
-menu_crud = tkinter.Menu(menu_bar, tearoff=0)
-menu_crud.add_command(label="Create", command=create_user)
-menu_crud.add_command(label="Read", command=read_user)
-menu_crud.add_command(label="Update", command=update_user)
-menu_crud.add_command(label="Delete", command=delete_user)
+        # Name
+        self.label_name = tkinter.Label(self, text="Name:")
+        self.label_name.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_name.grid(row=1, column=0, sticky="e", pady=10, padx=10)
 
-menu_help = tkinter.Menu(menu_bar, tearoff=0)
-menu_help.add_command(label="License", command=info_license)
-menu_help.add_command(label="About", command=info_about)
+        self.box_name = tkinter.Entry(self, textvariable=controller.user_name)
+        self.box_name.grid(row=1, column=1, sticky="w", pady=10, padx=0)
+        self.box_name.config(fg="black", justify="center")
 
-menu_bar.add_cascade(label="DB", menu=menu_db)
-menu_bar.add_cascade(label="Clean", menu=menu_clean)
-menu_bar.add_cascade(label="CRUD", menu=menu_crud, state=tkinter.DISABLED)
-menu_bar.add_cascade(label="Help", menu=menu_help)
+        # Password
+        self.label_password = tkinter.Label(self, text="Password:")
+        self.label_password.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_password.grid(row=2, column=0, sticky="e", pady=10, padx=10)
 
-# Id
-label_id = tkinter.Label(top_frame, text="Id:")
-label_id.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_id.grid(row=0, column=0, sticky="e", pady=10, padx=10)
+        self.box_password = tkinter.Entry(
+            self, textvariable=controller.user_password)
+        self.box_password.grid(row=2, column=1, sticky="w", pady=10, padx=0)
+        self.box_password.config(fg="black", justify="center", show="*")
 
-user_id = tkinter.StringVar()
-box_id = tkinter.Entry(top_frame, textvariable=user_id)
-box_id.grid(row=0, column=1, sticky="w", pady=10, padx=0)
-box_id.config(fg="red", justify="center")
+        self.checkbutton_pass = tkinter.Checkbutton(
+            self, text="U", variable=controller.check_pass,
+            onvalue=1, offvalue=0)
+        self.checkbutton_pass.config(bg=FRAME_BGCOLOR,
+                                     activebackground=FRAME_BGCOLOR,
+                                     font=("Garamond", 12))
+        self.checkbutton_pass.grid(row=2, column=3,
+                                   sticky="w", pady=10, padx=10)
+        self.checkbutton_pass.bind("<Enter>", self.__display_help)
+        self.checkbutton_pass.bind("<Leave>", self.__remove_help)
 
-# Name
-label_name = tkinter.Label(top_frame, text="Name:")
-label_name.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_name.grid(row=1, column=0, sticky="e", pady=10, padx=10)
+        # Surname
+        self.label_surname = tkinter.Label(self, text="Surname:")
+        self.label_surname.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_surname.grid(row=3, column=0, sticky="e", pady=10, padx=10)
 
-user_name = tkinter.StringVar()
-box_name = tkinter.Entry(top_frame, textvariable=user_name)
-box_name.grid(row=1, column=1, sticky="w", pady=10, padx=0)
-box_name.config(fg="black", justify="center")
+        self.box_surname = tkinter.Entry(
+            self, textvariable=controller.user_surname)
+        self.box_surname.grid(row=3, column=1, sticky="w", pady=10, padx=0)
+        self.box_surname.config(fg="black", justify="center")
+
+        # Address
+        self.label_address = tkinter.Label(self, text="Address:")
+        self.label_address.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_address.grid(row=4, column=0, sticky="e", pady=10, padx=10)
+
+        self.box_address = tkinter.Entry(
+            self, textvariable=controller.user_address)
+        self.box_address.grid(row=4, column=1, sticky="w", pady=10, padx=0)
+        self.box_address.config(fg="black", justify="center")
+
+        # Comment
+        self.label_comment = tkinter.Label(self, text="Comment:")
+        self.label_comment.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
+        self.label_comment.grid(row=5, column=0, sticky="e",
+                                pady=10, padx=10)
+
+        self.box_comment = tkinter.Text(self, width=15, height=5,
+                                        wrap=tkinter.WORD)
+        self.box_comment.grid(row=5, column=1, sticky="w",
+                              pady=10, padx=0)
+        self.box_comment.config(fg="black")
+
+        self.scroll_vert = tkinter.Scrollbar(self,
+                                             command=self.box_comment.yview)
+        self.scroll_vert.grid(row=5, column=2, sticky="nsew",
+                              pady=10, padx=0)
+        self.box_comment.config(yscrollcommand=self.scroll_vert.set)
+
+    def __display_help(self, event):
+        self.controller.root.frames[StatusBar].label_status.configure(
+            text="Update password")
+
+    def __remove_help(self, event):
+        self.controller.root.frames[StatusBar].label_status.configure(
+            text="")
 
 
-def display_help(event):
-    label_status.configure(text="Update password")
+class ButtonArea(tkinter.LabelFrame):
+    """
+    Frame with buttons
+    """
+    def __init__(self, parent, controller):
+        tkinter.LabelFrame.__init__(self, parent, text="CRUD")
+        self.parent = parent
+        self.config(bg=FRAME_BGCOLOR)
+        self.pack()
+
+        # Buttons
+        self.button_create = tkinter.Button(
+            self,
+            text="Create",
+            activebackground=BUTTON_A_BGCOLOR,
+            bg=BUTTON_BGCOLOR,
+            state=tkinter.DISABLED,
+            command=controller.create_user)
+        self.button_create.grid(row=0, column=0, sticky="w", pady=10, padx=10)
+
+        self.button_read = tkinter.Button(
+            self,
+            text="Read",
+            activebackground=BUTTON_A_BGCOLOR,
+            bg=BUTTON_BGCOLOR,
+            state=tkinter.DISABLED,
+            command=controller.read_user)
+        self.button_read.grid(row=0, column=1, sticky="w", pady=10, padx=10)
+
+        self.button_update = tkinter.Button(
+            self,
+            text="Update",
+            activebackground=BUTTON_A_BGCOLOR,
+            bg=BUTTON_BGCOLOR,
+            state=tkinter.DISABLED,
+            command=controller.update_user)
+        self.button_update.grid(row=0, column=2, sticky="w", pady=10, padx=10)
+
+        self.button_delete = tkinter.Button(
+            self,
+            text="Delete",
+            activebackground=BUTTON_A_BGCOLOR,
+            bg=BUTTON_BGCOLOR,
+            state=tkinter.DISABLED,
+            command=controller.delete_user)
+        self.button_delete.grid(row=0, column=3, sticky="w", pady=10, padx=10)
 
 
-def remove_help(event):
-    label_status.configure(text="")
+class StatusBar(tkinter.Frame):
+    """
+    Frame that displays messages at the bottom of the app
+    """
+    def __init__(self, parent, controller):
+        tkinter.Frame.__init__(self, parent)
+        self.parent = parent
+        self.config(bg=FRAME_BGCOLOR)
+        self.pack()
+        self.label_status = tkinter.Label(self, text="")
+        self.label_status.config(bg=FRAME_BGCOLOR, font=("Garamond", 10))
+        self.label_status.grid(row=0, column=0, sticky="e",
+                               pady=10, padx=10)
 
-# Password
-label_password = tkinter.Label(top_frame, text="Password:")
-label_password.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_password.grid(row=2, column=0, sticky="e", pady=10, padx=10)
 
-user_password = tkinter.StringVar()
-box_password = tkinter.Entry(top_frame, textvariable=user_password)
-box_password.grid(row=2, column=1, sticky="w", pady=10, padx=0)
-box_password.config(fg="black", justify="center", show="*")
+class MenuBar(tkinter.Menu):
+    """
+    Menu bar
+    """
+    def __init__(self, parent, controller):
+        tkinter.Menu.__init__(self, parent)
+        self.parent = parent
 
-check_pass = tkinter.IntVar()
-checkbutton_pass = tkinter.Checkbutton(top_frame, text="U",
-                                       variable=check_pass,
-                                       onvalue=1, offvalue=0)
-checkbutton_pass.config(bg=FRAME_BGCOLOR, activebackground=FRAME_BGCOLOR,
-                        font=("Garamond", 12))
-checkbutton_pass.grid(row=2, column=3, sticky="w", pady=10, padx=10)
-label_status = tkinter.Label(status_frame, text="")
-label_status.config(bg=FRAME_BGCOLOR, font=("Garamond", 10))
-label_status.grid(row=0, column=0, sticky="e", pady=10, padx=10)
-checkbutton_pass.bind("<Enter>", display_help)
-checkbutton_pass.bind("<Leave>", remove_help)
+        self.menu_db = tkinter.Menu(self, tearoff=0)
+        self.menu_db.add_command(label="Connect",
+                                 command=controller.connect_to_db)
+        self.menu_db.add_separator()
+        self.menu_db.add_command(label="Exit",
+                                 command=controller.confirm_exit)
 
-# Surname
-label_surname = tkinter.Label(top_frame, text="Surname:")
-label_surname.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_surname.grid(row=3, column=0, sticky="e", pady=10, padx=10)
+        self.menu_clean = tkinter.Menu(tearoff=0)
+        self.menu_clean.add_command(label="Clean fields",
+                                    command=controller.clean_fields)
 
-user_surname = tkinter.StringVar()
-box_surname = tkinter.Entry(top_frame, textvariable=user_surname)
-box_surname.grid(row=3, column=1, sticky="w", pady=10, padx=0)
-box_surname.config(fg="black", justify="center")
+        self.menu_crud = tkinter.Menu(tearoff=0)
+        self.menu_crud.add_command(label="Create",
+                                   command=controller.create_user)
+        self.menu_crud.add_command(label="Read",
+                                   command=controller.read_user)
+        self.menu_crud.add_command(label="Update",
+                                   command=controller.update_user)
+        self.menu_crud.add_command(label="Delete",
+                                   command=controller.delete_user)
 
-# Address
-label_address = tkinter.Label(top_frame, text="Address:")
-label_address.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_address.grid(row=4, column=0, sticky="e", pady=10, padx=10)
+        self.menu_help = tkinter.Menu(tearoff=0)
+        self.menu_help.add_command(label="License",
+                                   command=controller.info_license)
+        self.menu_help.add_command(label="About",
+                                   command=controller.info_about)
 
-user_address = tkinter.StringVar()
-box_address = tkinter.Entry(top_frame, textvariable=user_address)
-box_address.grid(row=4, column=1, sticky="w", pady=10, padx=0)
-box_address.config(fg="black", justify="center")
+        self.add_cascade(label="DB", menu=self.menu_db)
+        self.add_cascade(label="Clean", menu=self.menu_clean)
+        self.add_cascade(label="CRUD", menu=self.menu_crud,
+                         state=tkinter.DISABLED)
+        self.add_cascade(label="Help", menu=self.menu_help)
 
-# Comment
-label_comment = tkinter.Label(top_frame, text="Comment:")
-label_comment.config(bg=FRAME_BGCOLOR, font=("Garamond", 12))
-label_comment.grid(row=5, column=0, sticky="e", pady=10, padx=10)
 
-box_comment = tkinter.Text(top_frame, width=15, height=5, wrap=tkinter.WORD)
-box_comment.grid(row=5, column=1, sticky="w", pady=10, padx=0)
-box_comment.config(fg="black")
+def main():
+    App(DB_NAME)
 
-scroll_vert = tkinter.Scrollbar(top_frame, command=box_comment.yview)
-scroll_vert.grid(row=5, column=2, sticky="nsew", pady=10, padx=0)
-box_comment.config(yscrollcommand=scroll_vert.set)
-
-# Buttons
-button_create = tkinter.Button(bottom_frame, text="Create",
-                               activebackground=BUTTON_A_BGCOLOR,
-                               bg=BUTTON_BGCOLOR,
-                               state=tkinter.DISABLED,
-                               command=create_user)
-button_create.grid(row=0, column=0, sticky="w", pady=10, padx=10)
-
-button_read = tkinter.Button(bottom_frame, text="Read",
-                             activebackground=BUTTON_A_BGCOLOR,
-                             bg=BUTTON_BGCOLOR,
-                             state=tkinter.DISABLED,
-                             command=read_user)
-button_read.grid(row=0, column=1, sticky="w", pady=10, padx=10)
-
-button_update = tkinter.Button(bottom_frame, text="Update",
-                               activebackground=BUTTON_A_BGCOLOR,
-                               bg=BUTTON_BGCOLOR,
-                               state=tkinter.DISABLED,
-                               command=update_user)
-button_update.grid(row=0, column=2, sticky="w", pady=10, padx=10)
-
-button_delete = tkinter.Button(bottom_frame, text="Delete",
-                               activebackground=BUTTON_A_BGCOLOR,
-                               bg=BUTTON_BGCOLOR,
-                               state=tkinter.DISABLED,
-                               command=delete_user)
-button_delete.grid(row=0, column=3, sticky="w", pady=10, padx=10)
-
-root.mainloop()
+if __name__ == '__main__':
+    main()
